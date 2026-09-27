@@ -1,0 +1,43 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      # <app-id>_<service>_1
+      APP_HOST: clayop-zebra_web_1
+      APP_PORT: 80
+
+  zebra:
+    image: zfnd/zebra:6.4.2@sha256:6faf86c426d6fbdb2c10c9abde9c78d60bb0ef6d8742f05fa05eee9e7975c11d
+    # The image entrypoint starts as root, chowns the cache dir to UID 10001
+    # and drops privileges with setpriv, so no `user:` override here.
+    restart: unless-stopped
+    stop_grace_period: 5m
+    environment:
+      ZEBRA_NETWORK__NETWORK: "Mainnet"
+      ZEBRA_NETWORK__LISTEN_ADDR: "0.0.0.0:8233"
+      ZEBRA_STATE__CACHE_DIR: "/home/zebra/.cache/zebra"
+      # RPC stays inside the Docker network; nginx (web) adds basic auth for LAN clients.
+      ZEBRA_RPC__LISTEN_ADDR: "0.0.0.0:8232"
+      ZEBRA_RPC__ENABLE_COOKIE_AUTH: "false"
+      ZEBRA_TRACING__USE_COLOR: "false"
+      # Non-mining node: [mining] miner_address is intentionally left unset.
+    ports:
+      - "8233:8233"
+    volumes:
+      - ${APP_DATA_DIR}/data/zebra:/home/zebra/.cache/zebra
+
+  web:
+    image: nginx:1.30-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
+    restart: on-failure
+    depends_on: [zebra]
+    environment:
+      ZEBRA_RPC_UPSTREAM: "clayop-zebra_zebra_1:8232"
+      RPC_USER: "zebra"
+      RPC_PASSWORD: ${APP_PASSWORD}
+    ports:
+      - "8232:8232"
+    volumes:
+      # *.template files are rendered with envsubst into /etc/nginx/conf.d at startup.
+      - ${APP_DATA_DIR}/nginx:/etc/nginx/templates:ro
+      - ${APP_DATA_DIR}/web:/usr/share/nginx/html:ro

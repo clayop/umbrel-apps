@@ -1,0 +1,40 @@
+manifestVersion: 1
+id: clayop-zebra
+category: crypto
+name: Zebra
+version: "6.4.2"
+tagline: Run a Zcash full node (zebrad), no mining
+icon: https://raw.githubusercontent.com/ZcashFoundation/zebra/main/book/theme/favicon.png
+description: >-
+  Zebra is the Zcash Foundation's full node written in Rust. It downloads and
+  verifies every Zcash block and serves the zcashd-compatible JSON-RPC API.
+
+
+  This package runs zebrad on Mainnet as a plain validating node: no mining
+  address is configured and getblocktemplate is not used.
+
+
+  Ports exposed on your LAN:
+
+  - 8233/tcp: Zcash P2P (forward it on your router if you want inbound peers)
+
+  - 8232/tcp: JSON-RPC behind HTTP basic auth. User "zebra", password = the
+  app password shown in the umbrelOS app settings.
+
+
+  Requirements: about 300 GB of free disk space (growing) and ideally 16 GB RAM.
+  The initial sync from the network takes several days.
+developer: Zcash Foundation
+website: https://zebra.zfnd.org/
+dependencies: []
+repo: https://github.com/ZcashFoundation/zebra
+support: https://github.com/ZcashFoundation/zebra/issues
+port: 8234
+gallery: []
+path: ""
+defaultUsername: "zebra"
+deterministicPassword: true
+submitter: clayop
+submission: ""
+releaseNotes: >-
+  Zebra 6.4.2 (zfnd/zebra multi-arch image, amd64 + arm64).

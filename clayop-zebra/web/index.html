@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zebra Node</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3df; --accent:#c79a1e; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141414; --card:#1d1d1d; --fg:#ececec; --muted:#9a9a9a; --line:#2e2e2e; --accent:#f4b728; --bad:#f2b8b5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin:8px 0 4px; }
+  .bar > div { height:100%; width:0; background:var(--accent); transition:width .4s; }
+  dl { display:grid; grid-template-columns:max-content 1fr; gap:6px 16px; margin:0; }
+  dt { color:var(--muted); }
+  dd { margin:0; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  code { font-family:ui-monospace, monospace; font-size:13px; }
+  pre { margin:8px 0 0; padding:10px; background:var(--bg); border-radius:6px; overflow-x:auto; font-size:13px; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Zebra Node</h1>
+  <p class="sub" id="build">Connecting to zebrad...</p>
+
+  <div class="card">
+    <strong>Sync</strong>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="synctext" class="sub" style="margin:0"></div>
+  </div>
+
+  <div class="card">
+    <dl id="facts"></dl>
+  </div>
+
+  <div class="card">
+    <strong>JSON-RPC on your LAN</strong>
+    <p class="sub" style="margin:4px 0 0">Port 8232, HTTP basic auth. User <code>zebra</code>, password = the app password in umbrelOS.</p>
+    <pre id="curl"></pre>
+  </div>
+</main>
+<script>
+async function rpc(method, params = []) {
+  const r = await fetch("rpc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(`${method}: ${j.error.message}`);
+  return j.result;
+}
+
+const fmt = (n) => Number(n).toLocaleString("en-US");
+const gib = (b) => (b / 2 ** 30).toFixed(1) + " GiB";
+
+function row(k, v) {
+  return `<dt>${k}</dt><dd>${v}</dd>`;
+}
+
+async function refresh() {
+  try {
+    const [info, chain] = await Promise.all([rpc("getinfo"), rpc("getblockchaininfo")]);
+    document.getElementById("build").textContent = `${info.subversion} · ${chain.chain}`;
+    const tip = Math.max(chain.estimatedheight, chain.blocks);
+    const pct = tip ? (100 * chain.blocks) / tip : 0;
+    document.getElementById("bar").style.width = pct.toFixed(2) + "%";
+    document.getElementById("synctext").textContent =
+      `${fmt(chain.blocks)} / ~${fmt(tip)} blocks (${pct.toFixed(2)}%)`;
+    document.getElementById("facts").innerHTML =
+      row("Peers", fmt(info.connections)) +
+      row("Size on disk", gib(chain.size_on_disk)) +
+      row("Best block", `<code>${chain.bestblockhash}</code>`) +
+      (info.errors ? row("Errors", `<span class="err">${info.errors}</span>`) : "");
+  } catch (e) {
+    document.getElementById("build").innerHTML =
+      `<span class="err">zebrad RPC not reachable yet (${e.message}). It may still be starting.</span>`;
+  }
+}
+
+document.getElementById("curl").textContent =
+  `curl -u zebra:<password> -H 'Content-Type: application/json' \\\n` +
+  `  -d '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' \\\n` +
+  `  http://${location.hostname}:8232/`;
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
