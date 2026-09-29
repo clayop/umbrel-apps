@@ -38,6 +38,11 @@ services:
     ports:
       - "8232:8232"
     volumes:
+      # Both live under hooks/ on purpose: an umbrelOS app update re-copies only
+      # docker-compose.yml, top-level *.template, exports.sh, torrc, the hooks/
+      # directory and umbrel-app.yml, so any other folder stays frozen at its
+      # install-time contents. Nothing in these folders is executable, so
+      # umbrelOS never runs them as hooks.
       # *.template files are rendered with envsubst into /etc/nginx/conf.d at startup.
-      - ${APP_DATA_DIR}/nginx:/etc/nginx/templates:ro
-      - ${APP_DATA_DIR}/web:/usr/share/nginx/html:ro
+      - ${APP_DATA_DIR}/hooks/nginx:/etc/nginx/templates:ro
+      - ${APP_DATA_DIR}/hooks/status-page:/usr/share/nginx/html:ro

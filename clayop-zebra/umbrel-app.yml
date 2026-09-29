@@ -2,7 +2,7 @@ manifestVersion: 1
 id: clayop-zebra
 category: crypto
 name: Zebra
-version: "6.4.2-2"
+version: "6.4.2-3"
 tagline: Run a Zcash full node (zebrad), no mining
 icon: https://raw.githubusercontent.com/ZcashFoundation/zebra/main/book/theme/favicon.png
 description: >-
@@ -42,7 +42,10 @@ deterministicPassword: true
 submitter: clayop
 submission: ""
 releaseNotes: >-
-  Zebra 6.4.2 (zfnd/zebra multi-arch image, amd64 + arm64). Package revision 2:
+  Zebra 6.4.2 (zfnd/zebra multi-arch image, amd64 + arm64). Package revision 3:
+  fixes app updates not reaching the status page and nginx config (umbrelOS
+  re-copies only a few files on update, so they now live under hooks/); this
+  is what actually delivers the revision 1 status page. Revision 2:
   the listing now names this as an unofficial community package (developer,
   repo and support point to clayop/umbrel-apps instead of the Zcash
   Foundation). Revision 1: the status page shows a node error only while the node is actually

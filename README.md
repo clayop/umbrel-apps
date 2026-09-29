@@ -52,3 +52,10 @@ Updating Zebra: bump the tag and digest in `docker-compose.yml` and `version` in
 (`https://hub.docker.com/v2/repositories/zfnd/zebra/tags/<tag>` returns the index digest).
 Packaging-only changes keep the Zebra version and add a revision suffix (`6.4.2-1`, `6.4.2-2`, ...);
 umbrelOS offers an update whenever the store `version` string differs from the installed one.
+
+What an update actually delivers: umbrelOS re-copies only `docker-compose.yml`, top-level
+`*.template` (rendered with a bare `envsubst`, which would blank JavaScript `${...}`),
+`exports.sh`, `torrc`, the `hooks/` directory and `umbrel-app.yml`. Every other folder in
+`${APP_DATA_DIR}` keeps its install-time contents. That is why the status page and the nginx
+config live in `hooks/status-page/` and `hooks/nginx/` (non-executable, so never run as hooks).
+Keep any file that must change on update inside that whitelist.
