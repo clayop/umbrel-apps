@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zebra Node</title>
 <style>
-  :root { --bg:#f7f7f5; --card:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3df; --accent:#c79a1e; --bad:#b3261e; }
+  :root { --bg:#f7f7f5; --card:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3df; --accent:#c79a1e; --ok:#2e7d32; --warn:#9a6700; --bad:#b3261e; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#141414; --card:#1d1d1d; --fg:#ececec; --muted:#9a9a9a; --line:#2e2e2e; --accent:#f4b728; --bad:#f2b8b5; }
+    :root { --bg:#141414; --card:#1d1d1d; --fg:#ececec; --muted:#9a9a9a; --line:#2e2e2e; --accent:#f4b728; --ok:#81c995; --warn:#f4b728; --bad:#f2b8b5; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
@@ -20,9 +20,10 @@
   dl { display:grid; grid-template-columns:max-content 1fr; gap:6px 16px; margin:0; }
   dt { color:var(--muted); }
   dd { margin:0; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-  code { font-family:ui-monospace, monospace; font-size:13px; }
+  code, pre { font-family:ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace; font-size:13px; }
   pre { margin:8px 0 0; padding:10px; background:var(--bg); border-radius:6px; overflow-x:auto; font-size:13px; }
-  .err { color:var(--bad); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--bad); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:currentColor; margin-right:6px; vertical-align:1px; }
 </style>
 </head>
 <body>
@@ -47,11 +48,28 @@
   </div>
 </main>
 <script>
+// zebrad's getinfo.errors is sticky: it keeps the last error string (for example a
+// transient "error downloading and verifying block" during sync, or "chain tip metrics
+// channel closed" while starting up) long after the node has recovered. So this page
+// judges health itself and shows that string only while the node is actually unhealthy.
+const POLL_MS = 5000;              // Zcash targets 75 s blocks; 5 s keeps the height current
+const SYNCED_LAG_BLOCKS = 2;       // within this many blocks of the network estimate = synced
+const STALE_TIP_SEC = 20 * 60;     // synced but no new block for 20 min (p < 1e-6 at 75 s spacing)
+const STALL_SEC = 10 * 60;         // syncing but the height has not moved for 10 min
+
+let last = null;                   // latest successful snapshot
+let lastOkAt = 0;                  // ms, time of the latest successful poll
+let lastError = "";                // RPC failure message, if the latest poll failed
+let heightSince = { blocks: -1, at: 0 };  // when the current height was first seen
+const history = [];                // [{at, blocks}] for the sync rate, last 5 min
+let inFlight = false;
+
 async function rpc(method, params = []) {
   const r = await fetch("rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    cache: "no-store",
   });
   const j = await r.json();
   if (j.error) throw new Error(`${method}: ${j.error.message}`);
@@ -60,29 +78,93 @@ async function rpc(method, params = []) {
 
 const fmt = (n) => Number(n).toLocaleString("en-US");
 const gib = (b) => (b / 2 ** 30).toFixed(1) + " GiB";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
 
-function row(k, v) {
-  return `<dt>${k}</dt><dd>${v}</dd>`;
+function ago(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 90) return `${sec} s ago`;
+  if (sec < 90 * 60) return `${Math.round(sec / 60)} min ago`;
+  if (sec < 48 * 3600) return `${(sec / 3600).toFixed(1)} h ago`;
+  return `${(sec / 86400).toFixed(1)} d ago`;
 }
 
-async function refresh() {
+async function poll() {
+  if (inFlight) return;
+  inFlight = true;
   try {
     const [info, chain] = await Promise.all([rpc("getinfo"), rpc("getblockchaininfo")]);
-    document.getElementById("build").textContent = `${info.subversion} · ${chain.chain}`;
-    const tip = Math.max(chain.estimatedheight, chain.blocks);
-    const pct = tip ? (100 * chain.blocks) / tip : 0;
-    document.getElementById("bar").style.width = pct.toFixed(2) + "%";
-    document.getElementById("synctext").textContent =
-      `${fmt(chain.blocks)} / ~${fmt(tip)} blocks (${pct.toFixed(2)}%)`;
-    document.getElementById("facts").innerHTML =
-      row("Peers", fmt(info.connections)) +
-      row("Size on disk", gib(chain.size_on_disk)) +
-      row("Best block", `<code>${chain.bestblockhash}</code>`) +
-      (info.errors ? row("Errors", `<span class="err">${info.errors}</span>`) : "");
+    const header = await rpc("getblockheader", [chain.bestblockhash, true]);
+    const now = Date.now();
+    if (chain.blocks !== heightSince.blocks) heightSince = { blocks: chain.blocks, at: now };
+    history.push({ at: now, blocks: chain.blocks });
+    while (history.length && now - history[0].at > 5 * 60 * 1000) history.shift();
+    last = { info, chain, header };
+    lastOkAt = now;
+    lastError = "";
   } catch (e) {
-    document.getElementById("build").innerHTML =
-      `<span class="err">zebrad RPC not reachable yet (${e.message}). It may still be starting.</span>`;
+    lastError = e.message;
+  } finally {
+    inFlight = false;
+    render();
   }
+}
+
+function health(now) {
+  if (!last) return null;
+  const { info, chain, header } = last;
+  const network = Math.max(chain.estimatedheight, chain.blocks);
+  const synced = chain.blocks >= network - SYNCED_LAG_BLOCKS;
+  const tipAge = now / 1000 - header.time;
+  const stillFor = (now - heightSince.at) / 1000;
+  // `since` (unix s) = when the problem began; only node errors from then on are relevant.
+  if (lastError && now - lastOkAt > 3 * POLL_MS)
+    return { cls: "err", text: `RPC not answering for ${ago((now - lastOkAt) / 1000).replace(" ago", "")}`, problem: true, since: lastOkAt / 1000 };
+  if (info.connections === 0)
+    return { cls: "err", text: "No peers connected", problem: true, since: 0 };
+  if (synced && tipAge > STALE_TIP_SEC)
+    return { cls: "err", text: `Synced, but no new block for ${ago(tipAge).replace(" ago", "")}`, problem: true, since: header.time };
+  if (!synced && stillFor > STALL_SEC)
+    return { cls: "err", text: `Sync stalled: height unchanged for ${ago(stillFor).replace(" ago", "")}`, problem: true, since: heightSince.at / 1000 };
+  if (synced) return { cls: "ok", text: "Synced", problem: false };
+  const first = history[0], latest = history[history.length - 1];
+  const mins = first && latest.at > first.at ? (latest.at - first.at) / 60000 : 0;
+  const rate = mins >= 0.5 ? (latest.blocks - first.blocks) / mins : null;
+  return { cls: "warn", text: rate === null ? "Syncing" : `Syncing, ${fmt(Math.round(rate))} blocks/min`, problem: false };
+}
+
+function render() {
+  const now = Date.now();
+  if (!last) {
+    if (lastError)
+      document.getElementById("build").innerHTML =
+        `<span class="err">zebrad RPC not reachable yet (${esc(lastError)}). It may still be starting.</span>`;
+    return;
+  }
+  const { info, chain, header } = last;
+  const h = health(now);
+  const network = Math.max(chain.estimatedheight, chain.blocks);
+  const pct = network ? (100 * chain.blocks) / network : 0;
+  document.getElementById("build").textContent = `${info.subversion} · ${chain.chain}`;
+  document.getElementById("bar").style.width = pct.toFixed(2) + "%";
+  document.getElementById("synctext").textContent =
+    `${fmt(chain.blocks)} / ~${fmt(network)} blocks (${pct.toFixed(2)}%)`;
+
+  let problemRow = "";
+  // The error is shown only if it was raised after the problem started (1 min slack), so a
+  // stale error from an earlier, already recovered incident does not pose as the cause.
+  if (h.problem && info.errors && (info.errorstimestamp || 0) >= h.since - 60) {
+    const when = info.errorstimestamp ? ` <span class="sub">(${ago(now / 1000 - info.errorstimestamp)})</span>` : "";
+    problemRow = row("Last node error", `<span class="err">${esc(info.errors)}</span>${when}`);
+  }
+  document.getElementById("facts").innerHTML =
+    row("Status", `<span class="${h.cls}"><span class="dot"></span>${esc(h.text)}</span>`) +
+    problemRow +
+    row("Latest block", `${fmt(header.height)} · mined ${ago(now / 1000 - header.time)}`) +
+    row("Peers", fmt(info.connections)) +
+    row("Size on disk", gib(chain.size_on_disk)) +
+    row("Best block", `<code>${esc(chain.bestblockhash)}</code>`) +
+    row("Updated", ago((now - lastOkAt) / 1000) + (lastError ? ` <span class="err">(${esc(lastError)})</span>` : ""));
 }
 
 document.getElementById("curl").textContent =
@@ -90,8 +172,12 @@ document.getElementById("curl").textContent =
   `  -d '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' \\\n` +
   `  http://${location.hostname}:8232/`;
 
-refresh();
-setInterval(refresh, 10000);
+poll();
+setInterval(poll, POLL_MS);
+setInterval(render, 1000);  // keep the "... ago" labels ticking between polls
+// Browsers throttle timers in background tabs (down to once a minute), so refresh
+// immediately when the tab becomes visible again instead of showing a stale height.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
 </script>
 </body>
 </html>

@@ -27,6 +27,9 @@ Design notes:
 - zebrad cookie auth is disabled; zebrad's RPC port is not published. Only nginx on 8232
   reaches it, and it requires basic auth (`{PLAIN}` user file rendered from `$APP_PASSWORD`).
 - The status page calls `/rpc` through the umbrelOS app_proxy, so the Umbrel login protects it.
+  It polls every 5 s and judges health itself (tip age when synced, height progress while
+  syncing): zebrad's `getinfo.errors` is sticky and keeps the last error after recovery, so
+  that string is shown only while the node is unhealthy and only if raised after the problem began.
 - The zebra image entrypoint runs as root, chowns the state dir to UID 10001 and drops
   privileges with `setpriv`, so the service has no `user:` override.
 - Requirements: ~300 GB disk (growing), 16 GB RAM recommended, multi-day initial sync.
@@ -41,3 +44,5 @@ curl -u zebra:<password> -H 'Content-Type: application/json' \
 
 Updating Zebra: bump the tag and digest in `docker-compose.yml` and `version` in `umbrel-app.yml`
 (`https://hub.docker.com/v2/repositories/zfnd/zebra/tags/<tag>` returns the index digest).
+Packaging-only changes keep the Zebra version and add a revision suffix (`6.4.2-1`, `6.4.2-2`, ...);
+umbrelOS offers an update whenever the store `version` string differs from the installed one.
