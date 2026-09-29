@@ -2,10 +2,15 @@ manifestVersion: 1
 id: clayop-zebra
 category: crypto
 name: Zebra
-version: "6.4.2-1"
+version: "6.4.2-2"
 tagline: Run a Zcash full node (zebrad), no mining
 icon: https://raw.githubusercontent.com/ZcashFoundation/zebra/main/book/theme/favicon.png
 description: >-
+  Unofficial community package maintained by clayop; not affiliated with or
+  endorsed by the Zcash Foundation. Zebra itself is developed by the Zcash
+  Foundation. Report packaging issues to github.com/clayop/umbrel-apps.
+
+
   Zebra is the Zcash Foundation's full node written in Rust. It downloads and
   verifies every Zcash block and serves the zcashd-compatible JSON-RPC API.
 
@@ -24,11 +29,11 @@ description: >-
 
   Requirements: about 300 GB of free disk space (growing) and ideally 16 GB RAM.
   The initial sync from the network takes several days.
-developer: Zcash Foundation
+developer: clayop
 website: https://zebra.zfnd.org/
 dependencies: []
-repo: https://github.com/ZcashFoundation/zebra
-support: https://github.com/ZcashFoundation/zebra/issues
+repo: https://github.com/clayop/umbrel-apps
+support: https://github.com/clayop/umbrel-apps/issues
 port: 8234
 gallery: []
 path: ""
@@ -37,8 +42,10 @@ deterministicPassword: true
 submitter: clayop
 submission: ""
 releaseNotes: >-
-  Zebra 6.4.2 (zfnd/zebra multi-arch image, amd64 + arm64). Status page update
-  (package revision 1): shows a node error only while the node is actually
+  Zebra 6.4.2 (zfnd/zebra multi-arch image, amd64 + arm64). Package revision 2:
+  the listing now names this as an unofficial community package (developer,
+  repo and support point to clayop/umbrel-apps instead of the Zcash
+  Foundation). Revision 1: the status page shows a node error only while the node is actually
   unhealthy (zebrad keeps its last error, e.g. "chain tip metrics channel
   closed" after a restart, long after recovering), adds a status line with the
   age of the latest block, and refreshes every 5 s and immediately when the tab

@@ -9,6 +9,12 @@ App Store → ⋯ → Community App Stores, using this repository's HTTPS URL.
 
 Zcash full node ([zebrad](https://zebra.zfnd.org/)) on Mainnet, validating only (no mining).
 
+> **Unofficial community package.** Maintained by clayop and not affiliated with or endorsed
+> by the Zcash Foundation. Zebra itself is developed by the
+> [Zcash Foundation](https://github.com/ZcashFoundation/zebra); this repository only adds the
+> umbrelOS packaging (nginx RPC auth, status page). Report packaging problems
+> [here](https://github.com/clayop/umbrel-apps/issues), not to the Zebra project.
+
 | Service | Image | Role |
 |---|---|---|
 | `zebra` | `zfnd/zebra:6.4.2` (amd64 + arm64, pinned by digest) | Node. State in `${APP_DATA_DIR}/data/zebra` |
